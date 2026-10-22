@@ -1,4 +1,6 @@
 import { AudioPlayer } from "./playback.js";
+import { driveClock, initializeDriveCycle } from "./drive-cycle.mjs";
+import { applySnapshot, browserOwner, command, connectControls, selectedMotion, showSources, simulatorSnapshot } from "./cockpit.js";
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -10,11 +12,14 @@ let source = null;
 let silence = null;
 let player = null;
 let audioGeneration = 0;
-let busy = false;
+const pendingControls = new Set();
 let connecting = false;
 let ready = false;
 let generation = 0;
-const manualControls = ["temp-down", "temp-up", "volume", "destination-input"];
+const doorNames = ["front_left", "front_right", "rear_left", "rear_right"];
+const manualControls = ["temp-down", "temp-up", "volume", "destination-input",
+  "doors-open", "doors-close", "lid-hood", "lid-trunk",
+  ...doorNames.flatMap((name) => [`door-${name}`, `window-${name}`])];
 let processTurn = null;
 const processStages = ["listening", "understanding", "searching", "discovered", "executing", "responding"];
 
@@ -24,12 +29,12 @@ function step(stage, status) {
 function resetProcess(turn) {
   processTurn = turn;
   for (const stage of processStages) step(stage, "idle");
-  $("process-query").textContent = "No search yet";
+  $("process-query").textContent = "Direct tools / no discovery required";
   $("process-result").textContent = "No local action yet";
   $("process-matches").replaceChildren();
   const empty = document.createElement("span");
   empty.className = "process-empty";
-  empty.textContent = "No capabilities discovered this turn";
+  empty.textContent = "Available direct tools are selected by capability";
   $("process-matches").append(empty);
 }
 function formatArguments(raw) {
@@ -79,8 +84,8 @@ export function processEvent(event) {
     step("responding", "idle");
     if (document.querySelector('[data-step="searching"]').dataset.state === "idle") {
       step("searching", "skipped"); step("discovered", "skipped");
-      $("process-query").textContent = "No search event observed for this turn";
-      $("process-matches").textContent = "No discovery event observed for this turn";
+      $("process-query").textContent = "Direct tool call / no search";
+      $("process-matches").textContent = "No discovery round trip";
     }
     step("executing", "active");
     $("process-result").textContent = `${event.name}\n${formatArguments(event.arguments)}\n\nAwaiting local policy and execution result…`;
@@ -138,20 +143,41 @@ function log(label, text, rejected = false) {
   container.scrollTop = container.scrollHeight;
 }
 function controls() {
-  for (const id of manualControls) $(id).disabled = busy || !state;
-  $("nav-form").querySelector("button").disabled = busy || !state;
-  if (state && !busy) {
+  for (const id of manualControls) {
+    const domain = id.startsWith("temp") ? "climate" : id === "volume" ? "media" : id === "destination-input" ? "navigation" : "body";
+    $(id).disabled = pendingControls.has(domain) || !state;
+  }
+  $("nav-form").querySelector("button").disabled = pendingControls.has("navigation") || !state;
+  if (state && !pendingControls.has("climate")) {
     $("temp-down").disabled = state.temperature_c <= 16;
     $("temp-up").disabled = state.temperature_c >= 30;
   }
 }
 function render(next) {
   state = next;
+  applySnapshot(next);
   $("temperature").textContent = Number(next.temperature_c).toLocaleString(undefined, { maximumFractionDigits: 1 });
   $("temp-marker").style.left = `${(next.temperature_c - 16) / 14 * 100}%`;
   $("volume").value = next.volume_percent;
   $("volume-value").textContent = `${next.volume_percent}%`;
   $("destination").textContent = next.destination || "No destination selected";
+  for (const name of doorNames) {
+    const button = $(`door-${name}`);
+    button.setAttribute("aria-pressed", String(next.doors[name]));
+    button.querySelector("span").textContent = next.doors[name] ? "Open" : "Closed";
+    const windowButton = $(`window-${name}`);
+    windowButton.setAttribute("aria-pressed", String(next.windows[name]));
+    windowButton.setAttribute("aria-label", `${next.windows[name] ? "Raise" : "Lower"} ${name.replaceAll("_", " ")} window`);
+    windowButton.firstChild.textContent = next.windows[name] ? "Raise window " : "Lower window ";
+    windowButton.querySelector("span").textContent = next.windows[name] ? "Glass lowered" : "Glass raised";
+  }
+  for (const name of ["hood", "trunk"]) {
+    $(`lid-${name}`).setAttribute("aria-pressed", String(next.lids[name]));
+    $(`lid-${name}`).querySelector("span").textContent = next.lids[name] ? "Open" : "Closed";
+  }
+  const open = Object.values(next.doors).filter(Boolean).length;
+  $("doors-summary").textContent = open ? `${open} of 4 doors open` : "All doors closed";
+  document.dispatchEvent(new CustomEvent("vehicle-state", { detail: next }));
   controls();
 }
 function toolSummary(result) {
@@ -161,37 +187,45 @@ function toolSummary(result) {
       ? `Discovered: ${result.matches.map((tool) => tool.name).join(", ")}`
       : "No matching local capabilities found.";
   }
+  if (!result.state) return JSON.stringify(result.changed || result.data || { scope: result.scope, ok: result.ok });
   const s = result.state;
-  return `Cabin ${s.temperature_c} °C · volume ${s.volume_percent}% · destination ${s.destination || "not set"}`;
+  return `Cabin ${s.temperature_c} °C · volume ${s.volume_percent}% · destination ${s.destination || "not set"} · doors: ${doorNames.map((name) => `${name.replaceAll("_", " ")} ${s.doors[name] ? "open" : "closed"}`).join(", ")} · windows lowered: ${doorNames.filter((name) => s.windows[name]).join(", ") || "none"} · hood ${s.lids.hood ? "open" : "closed"} · trunk ${s.lids.trunk ? "open" : "closed"}`;
 }
 async function tool(name, args) {
-  if (busy) return;
-  busy = true;
+  const domain = name.includes("climate") ? "climate" : name.includes("media") ? "media" : name.includes("destination") ? "navigation" : "body";
+  if (pendingControls.has(domain)) return;
+  pendingControls.add(domain);
   controls();
   clearError();
   try {
-    const response = await fetch("/api/tool", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, arguments: args }),
-    });
-    const result = await response.json();
+    const packet = await command(name, args);
+    const result = packet.result;
     log(result.ok ? `LOCAL / ${name}` : "LOCAL POLICY / REJECTED", toolSummary(result), !result.ok);
-    if (!response.ok || !result.ok) throw new Error(result.error || "Local control failed.");
-    render(result.state);
+    render(packet.state);
+    if (!result.ok) throw new Error(result.error || "Local control failed.");
   } catch (e) {
     error(e.message);
     if (state) render(state);
-  } finally { busy = false; controls(); }
+  } finally { pendingControls.delete(domain); controls(); }
 }
-$("temp-down").onclick = () => tool("set_cabin_temperature", { temperature_c: Math.max(16, state.temperature_c - 1) });
-$("temp-up").onclick = () => tool("set_cabin_temperature", { temperature_c: Math.min(30, state.temperature_c + 1) });
+$("temp-down").onclick = () => tool("set_climate", { temperature_c: state.temperature_c - 1 });
+$("doors-open").onclick = () => tool("set_vehicle_doors", { door: "all", is_open: true });
+$("doors-close").onclick = () => tool("set_vehicle_doors", { door: "all", is_open: false });
+for (const name of doorNames) {
+  $(`door-${name}`).onclick = () => tool("set_vehicle_doors", { door: name, is_open: !state.doors[name] });
+  $(`window-${name}`).onclick = () => tool("set_vehicle_windows", { window: name, is_open: !state.windows[name] });
+}
+for (const name of ["hood", "trunk"]) {
+  $(`lid-${name}`).onclick = () => tool("set_vehicle_lid", { lid: name, is_open: !state.lids[name] });
+}
+$("temp-up").onclick = () => tool("set_climate", { temperature_c: state.temperature_c + 1 });
 $("volume").oninput = () => { $("volume-value").textContent = `${$("volume").value}%`; };
 $("volume").onchange = () => tool("set_media_volume", { volume_percent: Number($("volume").value) });
 $("nav-form").onsubmit = (event) => {
   event.preventDefault();
   const destination = $("destination-input").value.trim();
   if (!destination) { error("Enter a destination first."); return; }
-  void tool("start_navigation", { destination });
+  void tool("set_destination", { destination });
 };
 $("clear-log").onclick = () => { $("activity").replaceChildren(); };
 
@@ -213,7 +247,8 @@ function stop() {
   $("connection-pill").textContent = "DISCONNECTED";
   $("voice-title").textContent = "Ready when you are.";
   $("voice-status").textContent = "Microphone off. Local controls remain available.";
-  document.querySelector(".assistant-card").classList.remove("connected");
+  document.querySelector(".assistant-card").classList.remove("connected", "connecting");
+  $("agent-visual").setAttribute("aria-label", "AI agent disconnected");
   if (processTurn !== null && processStages.some((stage) => document.querySelector(`[data-step="${stage}"]`).dataset.state === "active")) {
     for (const stage of processStages) {
       if (document.querySelector(`[data-step="${stage}"]`).dataset.state === "active") step(stage, "error");
@@ -232,6 +267,8 @@ async function connect() {
   if (connecting || socket) { stop(); return; }
   clearError();
   connecting = true;
+  document.querySelector(".assistant-card").classList.add("connecting");
+  $("agent-visual").setAttribute("aria-label", "AI agent connecting");
   const attempt = ++generation;
   $("connect-label").textContent = "Cancel connection";
   $("connection-pill").textContent = "CONNECTING";
@@ -249,7 +286,8 @@ async function connect() {
     });
     if (attempt !== generation) { acquired.getTracks().forEach((track) => track.stop()); return; }
     stream = acquired;
-    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+    if (!browserOwner()) throw new Error("Connect cockpit controls before voice.");
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?owner=${encodeURIComponent(browserOwner())}`);
     socket = ws;
     ws.binaryType = "arraybuffer";
     ws.onmessage = (event) => {
@@ -266,6 +304,8 @@ async function connect() {
           $("voice-title").textContent = "Let's take it from here.";
           $("voice-status").textContent = "Microphone on. Speak naturally. Talk over a reply to interrupt it.";
           document.querySelector(".assistant-card").classList.add("connected");
+          document.querySelector(".assistant-card").classList.remove("connecting");
+          $("agent-visual").setAttribute("aria-label", "AI agent connected and active");
           source = context.createMediaStreamSource(stream);
           capture = new AudioWorkletNode(context, "pcm-capture");
           silence = context.createGain(); silence.gain.value = 0;
@@ -275,7 +315,7 @@ async function connect() {
             ws.send(data);
           };
           source.connect(capture); capture.connect(silence); silence.connect(context.destination);
-          log("CLOUD / CONNECTED", "Audio goes to Foundry. Vehicle functions execute in the local simulator.");
+          log("CLOUD / CONNECTED", "Audio goes to Foundry. Vehicle tools update local cockpit state.");
         } else if (message.type === "audio") {
           if (!ready || message.generation < audioGeneration) return;
           const decoded = atob(message.pcm);
@@ -298,6 +338,7 @@ async function connect() {
           log(message.role === "user" ? "YOU" : "VOICE AGENT", message.text);
         } else if (message.type === "tool") {
           render(message.state);
+          showSources(message.result);
           log(message.result.ok ? `LOCAL / ${message.name}` : "LOCAL POLICY / REJECTED", toolSummary(message.result), !message.result.ok);
         } else if (message.type === "error") {
           error(message.message); stop();
@@ -316,20 +357,48 @@ async function connect() {
   }
 }
 $("connect").onclick = () => { void connect(); };
+document.addEventListener("cockpit-snapshot", (event) => render(event.detail));
+document.addEventListener("cockpit-error", (event) => error(event.detail));
+document.addEventListener("cockpit-result", ({ detail }) => {
+  log(detail.result.ok ? `LOCAL / ${detail.name}` : "LOCAL POLICY / REJECTED", toolSummary(detail.result), !detail.result.ok);
+});
 window.addEventListener("pagehide", stop);
 function clock() { $("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
 clock(); setInterval(clock, 10000);
 try {
-  const response = await fetch("/api/state");
-  if (!response.ok) throw new Error("Could not load the local vehicle simulator.");
+  const [response, trace] = await Promise.all([fetch("/api/state"), fetch("/static/ftp75.txt")]);
+  if (!response.ok) throw new Error("Could not load local cockpit state.");
+  if (!trace.ok) throw new Error("Could not load the EPA FTP-75 speed trace.");
+  initializeDriveCycle(await trace.text(), performance.now());
   const info = await response.json();
   render(info.state);
+  connectControls(info);
+  $("grounding-health").textContent = info.grounding.enabled ? `WebIQ / ${info.grounding.health}` : "WebIQ disabled / local controls ready";
+  const formatTime = (seconds) => `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
+  function renderDrive(time) {
+    const trace = driveClock.sample(time);
+    const simulated = simulatorSnapshot();
+    const reference = selectedMotion() === "reference";
+    const speed = reference ? trace.speedKmh : simulated.actual_speed_kmh;
+    const imperial = state?.domains?.cluster.units === "imperial";
+    $("speed").textContent = speed.toFixed(1);
+    $("cluster-speed").textContent = `${(speed * (imperial ? .621371 : 1)).toFixed(1)} ${imperial ? "mph" : "km/h"}`;
+    $("drive-status").textContent = reference ? "REFERENCE TRACE" : "CLIENT SIMULATOR";
+    $("speed-source").textContent = reference ? "Speed / EPA FTP-75 reference" : "Speed / client simulator";
+    $("drive-progress").textContent = reference ? `${formatTime(trace.cycleSeconds)} / ${formatTime(trace.durationSeconds)} / looping` : "Autopilot scene selected / reference trace not driving wheels";
+    requestAnimationFrame(renderDrive);
+  }
+  requestAnimationFrame(renderDrive);
+  if (info.public_demo) {
+    $("voice-caption").textContent = `Public demo: shared vehicle controls, one voice session at a time, ${info.voice_session_seconds / 60} minutes per session and ${info.voice_starts_per_day} starts per rolling day across all visitors. Do not enter private information. Audio is sent to Azure.`;
+    log("PUBLIC DEMO", "Vehicle state is shared by all visitors. No real vehicle is connected. Hosting and voice usage are paid by the demo owner.");
+  }
   if (info.mode === "offline") {
-    $("connect-label").textContent = "Offline cockpit demo";
+    $("connect-label").textContent = "Offline cockpit";
     $("voice-title").textContent = "Explore your cockpit.";
     $("voice-caption").textContent = "Try the climate, volume, and destination controls. Every action runs through local vehicle policy.";
     $("voice-status").textContent = "No microphone or AI in offline mode. Start the server without --demo for cloud voice.";
-    log("SIMULATOR / READY", "Interactive local controls. Battery, range, and map are illustrative, not live telemetry.");
+    log("COCKPIT / READY", "Local controls are ready. Battery, range, and map are reference values, not live telemetry.");
   } else {
     $("connect").disabled = false;
     $("connect-label").textContent = "Connect voice agent";

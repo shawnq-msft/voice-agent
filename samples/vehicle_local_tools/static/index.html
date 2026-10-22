@@ -4,58 +4,82 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#080c12">
-  <title>AURA / Vehicle voice cockpit</title>
+  <title>Azure Voice Agent for Cars / AURA</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/agent-theme.css">
+  <link rel="stylesheet" href="/static/cockpit.css">
 </head>
 <body>
   <div class="ambient" aria-hidden="true"></div>
   <div class="shell">
-    <header>
+    <header class="site-header">
+      <div class="header-bar">
       <a class="brand" href="/" aria-label="Aura cockpit home"><span class="brand-mark">A</span>AURA<span class="brand-sub">CONNECTED DRIVE</span></a>
-      <div class="header-meta"><span class="simulation">SIMULATED VEHICLE</span><span id="clock"></span><span class="avatar">D</span></div>
-    </header>
-    <main>
+      <div class="header-meta"><span class="execution-scope">LOCAL COCKPIT</span><span id="clock"></span><span class="avatar">D</span></div>
+      </div>
       <div class="page-heading">
-        <div><div class="eyebrow">YOUR PERSONAL COCKPIT</div><h1>A little more connected.</h1><p>Your voice in the cloud. Your vehicle controls, right here.</p></div>
+        <div><h1>Azure Voice Agent for Cars</h1><p>A little more connected. <span>Your voice in the cloud. Your vehicle controls, right here.</span></p></div>
         <div class="local-badge"><span class="status-dot"></span> LOCAL EXECUTION <small>Protected by vehicle policy</small></div>
       </div>
       <section class="card process-card" aria-labelledby="process-title">
-        <div class="card-heading"><div><div class="eyebrow">LIVE REQUEST PIPELINE</div><h2 id="process-title">From your voice to a local action.</h2></div><span id="process-pill" class="pill">WAITING FOR A REQUEST</span></div>
+        <div class="card-heading"><h2 id="process-title">Live request pipeline</h2><span id="process-pill" class="pill">WAITING FOR A REQUEST</span></div>
         <ol class="process-steps" aria-label="Request processing stages">
-          <li data-step="listening" data-state="idle"><span class="step-number">01</span><div><strong>Listen</strong><small>Vehicle microphone</small></div></li>
+          <li data-step="listening" data-state="idle"><span class="step-number">01</span><div><strong>Listen</strong><small>Browser microphone</small></div></li>
           <li data-step="understanding" data-state="idle"><span class="step-number">02</span><div><strong>Select action</strong><small>Cloud voice agent</small></div></li>
           <li data-step="searching" data-state="idle"><span class="step-number">03</span><div><strong>Search tools</strong><small>Local catalog</small></div></li>
           <li data-step="discovered" data-state="idle"><span class="step-number">04</span><div><strong>Discover</strong><small>Matched definitions</small></div></li>
-          <li data-step="executing" data-state="idle"><span class="step-number">05</span><div><strong>Execute locally</strong><small>Policy + simulator</small></div></li>
-          <li data-step="responding" data-state="idle"><span class="step-number">06</span><div><strong>Reply</strong><small>Actual tool result</small></div></li>
+          <li data-step="executing" data-state="idle"><span class="step-number">03</span><div><strong>Execute</strong><small>Policy + provider receipt</small></div></li>
+          <li data-step="responding" data-state="idle"><span class="step-number">04</span><div><strong>Reply</strong><small>Actual tool result</small></div></li>
         </ol>
         <div id="process-status" class="process-status" role="status"><span class="status-dot"></span><span id="process-detail">Connect voice and speak to see the actual processing events here.</span></div>
-        <div class="process-details">
-          <div><span class="eyebrow">SEARCH QUERY / REQUEST</span><pre id="process-query">No search yet</pre></div>
-          <div><span class="eyebrow">DISCOVERED CAPABILITIES</span><div id="process-matches" class="process-matches"><span class="process-empty">No capabilities discovered this turn</span></div></div>
+        <details class="pipeline-inspector">
+          <summary>Request details <span>Direct tools &amp; execution receipts</span></summary>
+          <div class="process-details">
+          <div><span class="eyebrow">TOOL SELECTION</span><pre id="process-query">Direct tools / no compulsory search</pre></div>
+          <div><span class="eyebrow">CAPABILITY AVAILABILITY</span><div id="process-matches" class="process-matches"><span class="process-empty">Direct tools follow provider availability</span></div></div>
           <div><span class="eyebrow">LOCAL EXECUTION</span><pre id="process-result">No local action yet</pre></div>
         </div>
-        <div class="process-note">Observed service and client events only · no hidden model reasoning · every vehicle request searches again</div>
+        <div class="process-note">Observed events only / direct tools / no compulsory discovery / no hidden model reasoning</div>
+        </details>
       </section>
+    </header>
+    <main>
       <div class="cockpit-grid">
         <section class="card vehicle-card" aria-labelledby="vehicle-title">
-          <div class="card-heading"><div><div class="eyebrow">VEHICLE OVERVIEW</div><h2 id="vehicle-title">AURA One <span class="muted">/ Electric</span></h2></div><span class="pill">PARKED</span></div>
+          <div class="card-heading"><div><div class="eyebrow">VEHICLE OVERVIEW</div><h2 id="vehicle-title">AURA One <span class="muted">/ Electric</span></h2></div><span id="drive-status" class="pill">LOADING SIMULATION</span></div>
           <div class="car-stage">
             <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
-            <img class="car" src="/static/car.svg" alt="Pearl silver AURA One electric sedan with panoramic glass, machined alloy wheels, and LED headlights" width="885" height="385">
-            <span class="car-label"><span class="status-dot"></span> Vehicle systems online <small>Local simulator</small></span>
+            <div id="car-view" role="img" aria-label="Interactive 3D vehicle model"></div>
+            <span id="model-status" class="model-status" role="status">Loading your 3D vehicle...</span>
+            <span class="car-label">Vehicle model <small>Local cockpit state</small></span>
           </div>
-          <div class="vehicle-stats"><div><span class="stat-icon">↯</span><strong>78<span>%</span></strong><small>Battery · demo value</small><div class="battery-track"><i></i></div></div><div><strong>312<span>km</span></strong><small>Range · demo value</small></div><div><strong>0<span>km/h</span></strong><small>Speed · parked simulator</small></div></div>
-          <div class="vehicle-footer"><span>● &nbsp; All actions are simulated</span><span>NO REAL VEHICLE CONNECTED</span></div>
+          <div class="door-controls" aria-labelledby="doors-title">
+            <div class="door-heading"><div><span class="eyebrow">PEARL WHITE / INTERACTIVE MODEL</span><h3 id="doors-title">Doors, windows & compartments.</h3></div><a href="/static/vehicle-doors.glb" download="vehicle-doors.glb">Download modified 3D model</a></div>
+            <div class="door-actions"><button id="doors-open" class="door-all" disabled>Open all doors</button><button id="doors-close" class="door-all" disabled>Close all doors</button><span id="doors-summary" role="status">Loading door state...</span></div>
+            <div class="door-grid" role="group" aria-label="Individual passenger doors">
+              <div class="door-control"><button id="door-front_left" data-door="front_left" aria-pressed="false" disabled>Front left <span>Closed</span></button><button id="window-front_left" data-window="front_left" class="window-switch" aria-label="Lower front left window" aria-pressed="false" disabled>Lower window <span>Glass raised</span></button></div>
+              <div class="door-control"><button id="door-front_right" data-door="front_right" aria-pressed="false" disabled>Front right <span>Closed</span></button><button id="window-front_right" data-window="front_right" class="window-switch" aria-label="Lower front right window" aria-pressed="false" disabled>Lower window <span>Glass raised</span></button></div>
+              <div class="door-control"><button id="door-rear_left" data-door="rear_left" aria-pressed="false" disabled>Rear left <span>Closed</span></button><button id="window-rear_left" data-window="rear_left" class="window-switch" aria-label="Lower rear left window" aria-pressed="false" disabled>Lower window <span>Glass raised</span></button></div>
+              <div class="door-control"><button id="door-rear_right" data-door="rear_right" aria-pressed="false" disabled>Rear right <span>Closed</span></button><button id="window-rear_right" data-window="rear_right" class="window-switch" aria-label="Lower rear right window" aria-pressed="false" disabled>Lower window <span>Glass raised</span></button></div>
+            </div>
+            <div class="component-actions" role="group" aria-label="Compartments">
+              <button id="lid-hood" aria-pressed="false" disabled>Front hood <span>Closed</span></button>
+              <button id="lid-trunk" aria-pressed="false" disabled>Rear trunk <span>Closed</span></button>
+            </div>
+            <div class="model-views" role="group" aria-label="3D camera views"><span>VIEW</span><button data-view="front">Front 3/4</button><button data-view="side">Side</button><button data-view="rear">Rear 3/4</button><button data-view="cockpit">Cockpit</button><small>EPA FTP-75 driving trace · 10-minute soak omitted · model stays in place.</small></div>
+            <div class="door-heading drive-cycle-status"><div><span class="eyebrow">EPA FTP-75 / SIMULATED SPEED</span><small id="drive-progress">Loading automatic drive simulation...</small></div><a href="https://www.epa.gov/vehicle-and-fuel-emissions-testing/dynamometer-drive-schedules" target="_blank" rel="noopener noreferrer">EPA trace source</a></div>
+          </div>
+          <div class="vehicle-stats"><div><span class="stat-icon">↯</span><strong>78<span>%</span></strong><small>Battery · reference value</small><div class="battery-track"><i></i></div></div><div><strong>312<span>km</span></strong><small>Range · reference value</small></div><div><strong><b id="speed">0.0</b><span>km/h</span></strong><small id="speed-source">Speed / client simulator</small></div></div>
+          <div class="vehicle-footer"><span>● &nbsp; Actions update local cockpit state</span><span>NO VEHICLE HARDWARE CONNECTED</span></div>
         </section>
         <section class="card assistant-card" aria-labelledby="assistant-title">
-          <div class="card-heading"><div><div class="eyebrow">VOICE COMPANION</div><h2 id="assistant-title">Meet your co-pilot.</h2></div><span id="connection-pill" class="pill">OFFLINE</span></div>
-          <div class="voice-visual" aria-hidden="true"><div class="voice-ring"></div><div class="voice-orb"><svg viewBox="0 0 80 80"><path d="M23 38v5m8-15v25m9-33v42m9-34v25m8-17v9" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></div></div>
+          <div class="card-heading"><div><div class="eyebrow">AZURE VOICE AGENT</div><h2 id="assistant-title">Meet your co-pilot.</h2></div><span id="connection-pill" class="pill">OFFLINE</span></div>
+          <div id="agent-visual" class="voice-visual" role="img" aria-label="AI agent disconnected"><div class="voice-ring"></div><div class="voice-orb"><svg aria-hidden="true" viewBox="0 0 80 80"><path d="M23 38v5m8-15v25m9-33v42m9-34v25m8-17v9" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></div></div>
           <h3 id="voice-title">Ready when you are.</h3>
           <p id="voice-caption">Climate, music, or your next destination.<br>Just ask, and your vehicle handles the rest.</p>
           <button id="connect" class="primary" disabled><span>◉</span> <span id="connect-label">Loading cockpit…</span></button>
           <div id="voice-status" class="voice-status" role="status">Checking connection mode…</div>
-          <div class="suggestions"><span>TRY SAYING</span><p>“Set the cabin to 22 degrees Celsius.”</p><p>“Turn the volume down to 15 percent.”</p><p>“Navigate to Central Library.”</p></div>
+          <div class="suggestions"><span>TRY SAYING</span><p>“Set the cabin to 22 degrees Celsius.”</p><p>“Open all doors.”</p><p>“Close the front left door.”</p></div>
           <div class="trust-strip"><span>☁ &nbsp; Cloud reasoning</span><i>→</i><span>◇ &nbsp; Local tools</span></div>
         </section>
         <section class="card climate-card" aria-labelledby="climate-title">
@@ -63,16 +87,79 @@
           <div class="temperature-controls"><button id="temp-down" class="round" aria-label="Lower cabin temperature">−</button><div class="temperature"><span id="temperature">21</span><sup>°C</sup><small>CABIN SETPOINT</small></div><button id="temp-up" class="round" aria-label="Raise cabin temperature">+</button></div>
           <div class="climate-scale"><span>16°</span><div><i id="temp-marker"></i></div><span>30°</span></div>
           <div class="subtle-row"><span>Local policy range</span><strong>16–30 °C</strong></div>
+          <div class="domain-settings">
+            <label>Fan <input id="climate-fan" type="number" step="1" value="3"></label>
+            <label><input id="climate-power" type="checkbox" checked> Power</label>
+            <label><input id="climate-ac" type="checkbox" checked> AC</label>
+            <label><input id="climate-auto" type="checkbox" checked> Auto</label>
+            <label><input id="climate-recirculation" type="checkbox"> Recirculation</label>
+            <label><input id="climate-defrost" type="checkbox"> Defrost</label>
+          </div><small>Local settings / climate hardware not connected</small>
         </section>
         <section class="card navigation-card" aria-labelledby="navigation-title">
           <div class="map" aria-hidden="true"><div class="map-road r1"></div><div class="map-road r2"></div><div class="map-road r3"></div><svg viewBox="0 0 350 170"><path d="M70 145 70 92 170 92 170 44 276 44" fill="none" stroke="#61ead0" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 4"/><circle cx="276" cy="44" r="8" fill="#61ead0"/><circle cx="70" cy="145" r="9" fill="#eafff9"/></svg><span class="map-label label-one">CENTRAL DISTRICT</span><span class="map-label label-two">RIVERSIDE</span></div>
-          <div class="nav-content"><div class="eyebrow">NEXT DESTINATION</div><h2 id="navigation-title">Where to next?</h2><p id="destination">No destination selected</p><form id="nav-form"><label class="sr-only" for="destination-input">Simulated destination</label><input id="destination-input" maxlength="200" placeholder="Enter a destination…" required><button type="submit" class="nav-go" aria-label="Set simulated destination">↗</button></form><small>Illustrative map only · no routing or ETA</small></div>
+          <div class="nav-content"><div class="eyebrow">NEXT DESTINATION</div><h2 id="navigation-title">Where to next?</h2><p id="destination">No destination selected</p><form id="nav-form"><label class="sr-only" for="destination-input">Destination</label><input id="destination-input" maxlength="200" placeholder="Enter a destination…" required><button type="submit" class="nav-go" aria-label="Save destination">↗</button></form><small>Reference map only · no route or arrival time</small></div>
+          <div class="domain-settings"><button id="nav-clear">Clear destination</button>
+            <label><input id="nav-avoid_tolls" type="checkbox"> Avoid tolls</label>
+            <label><input id="nav-avoid_highways" type="checkbox"> Avoid highways</label></div>
         </section>
         <section class="card media-card" aria-labelledby="media-title">
           <div class="card-heading"><div><div class="eyebrow">SOUND EXPERIENCE</div><h2 id="media-title">Set the mood.</h2></div><span class="mini-icon">♫</span></div>
-          <div class="album-row"><div class="album" aria-hidden="true"><div></div></div><div><strong>Your cabin. Your soundtrack.</strong><p>Volume control simulator</p><span class="pill">NO AUDIO SOURCE</span></div></div>
+          <div class="album-row"><div class="album" aria-hidden="true"><div></div></div><div><strong>Your cabin. Your soundtrack.</strong><p>Local volume setting</p><span id="media-availability" class="pill">NO AUDIO SOURCE</span></div></div>
           <div class="volume-row"><span>◖</span><label class="sr-only" for="volume">Media volume</label><input type="range" id="volume" min="0" max="60" value="20"><output id="volume-value" for="volume">20%</output></div>
           <div class="subtle-row"><span>Local volume limit</span><strong>60%</strong></div>
+          <label class="file-label">Choose local audio <input id="media-file" type="file" accept="audio/*"></label>
+          <audio id="local-audio" preload="metadata"></audio>
+          <p id="media-source">No file selected / files stay in this browser</p>
+          <div class="domain-settings" role="group" aria-label="Local audio controls">
+            <button id="media-play">Play</button><button id="media-pause">Pause</button>
+            <button id="media-mute">Mute</button><button id="media-unmute">Unmute</button>
+            <label>Position (seconds) <input id="media-position" type="number" min="0" value="0"></label><button id="media-seek">Seek</button>
+          </div>
+        </section>
+        <section id="sim-panel" class="card domain-card" aria-labelledby="sim-title">
+          <div class="card-heading"><div><div class="eyebrow">BROWSER-ONLY SIMULATOR</div><h2 id="sim-title">Autopilot scene</h2></div><span class="pill">TESLA-INSPIRED</span></div>
+          <p>Original toy scene. Not Tesla software, FSD, or a vehicle connection. Not for driving.</p>
+          <label>Motion source <select id="motion-source"><option value="simulator">Autopilot scene</option><option value="reference">EPA FTP-75 reference trace</option></select></label>
+          <canvas id="sim-scene" width="360" height="220" role="img" aria-label="Virtual lane with lead car and local vehicle"></canvas>
+          <strong id="sim-state" role="status">Disengaged / paused</strong>
+          <p id="sim-warning" role="status">Scene starts paused.</p>
+          <div class="subtle-row"><span id="sim-speed-readout"></span><span id="sim-gap-readout"></span></div>
+          <div class="domain-settings">
+            <button id="sim-resume">Resume scene</button><button id="sim-engage">Engage assistance</button>
+            <button id="sim-disengage">Disengage</button><button id="sim-pause">Pause scene</button>
+            <label>Target km/h <input id="sim-speed" type="number" value="60"></label>
+            <label>Gap level <input id="sim-gap" type="number" step="1" value="3"></label>
+            <label><input id="sim-lane" type="checkbox" checked> Lane keeping</label><button id="sim-update">Apply settings</button>
+            <label>Scenario <select id="sim-scenario"><option value="clear">Clear lane</option><option value="slowing_lead">Slowing lead car</option><option value="lane_loss">Lane markers lost</option><option value="obstacle">Obstacle</option></select></label>
+            <button id="sim-acknowledge" disabled>Acknowledge takeover</button>
+          </div>
+          <small id="assist-help">After a takeover, select Clear lane and acknowledge manually. Resume remains disengaged.</small>
+          <p id="assist-explanation" hidden>Lane keeping centers the virtual car. Following gap changes the virtual lead-car distance target. These are toy dynamics.</p>
+          <div class="domain-settings"><label>Panel detail <select id="assist-detail"><option>brief</option><option>detailed</option></select></label><label><input id="assist-tips" type="checkbox" checked> Informational tips</label></div>
+        </section>
+        <section class="card domain-card" aria-labelledby="cluster-title">
+          <div class="eyebrow">INSTRUMENT CLUSTER</div><h2 id="cluster-title">Your display</h2>
+          <div id="cluster-readout"><strong id="cluster-speed">0.0 km/h</strong><p>Virtual speed only / hardware telemetry unavailable</p></div>
+          <div class="domain-settings">
+            <label>Units <select id="cluster-units"><option value="metric">Metric</option><option value="imperial">Imperial</option></select></label>
+            <label>Theme <select id="cluster-theme"><option>dark</option><option>light</option></select></label>
+            <label>Layout <select id="cluster-layout"><option>standard</option><option>compact</option></select></label>
+            <label>Brightness <input id="cluster-brightness" type="range" value="80"></label>
+          </div><small>Presentation preferences only. Mandatory warnings remain visible.</small>
+        </section>
+        <section class="card domain-card" aria-labelledby="phone-title">
+          <div class="eyebrow">BLUETOOTH PHONE</div><h2 id="phone-title">Phone connection</h2>
+          <p>Not connected. This browser has no hands-free phone provider.</p>
+          <div class="domain-settings"><button disabled>Pair phone unavailable</button><button disabled>Calling unavailable</button>
+            <label><input id="phone-notifications" type="checkbox" checked> Panel notifications</label>
+            <label>Detail <select id="phone-detail"><option>brief</option><option>detailed</option></select></label>
+          </div><small>Preferences change this panel, not a phone.</small><p id="phone-preference-status"></p>
+        </section>
+        <section class="card domain-card" aria-labelledby="grounding-title">
+          <div class="eyebrow">PUBLIC EVIDENCE</div><h2 id="grounding-title">Answer sources</h2>
+          <p id="grounding-health">WebIQ not tested</p><p id="source-status">No web lookup for routine car controls.</p><ol id="sources"></ol>
+          <p id="control-status" role="status">Controls connecting</p><button id="reconnect-controls">Reconnect cockpit controls</button>
         </section>
         <section class="card activity-card" aria-labelledby="activity-title">
           <div class="card-heading"><div><div class="eyebrow">UNDER THE HOOD</div><h2 id="activity-title">Conversation & execution.</h2></div><button id="clear-log" class="text-button">Clear</button></div>
@@ -80,9 +167,11 @@
         </section>
       </div>
       <div id="error" class="error" role="alert" hidden></div>
-      <footer><span>AURA / VEHICLE VOICE AGENT SAMPLE</span><span>Cloud intelligence. Local authority.</span><span>SIMULATION — NOT FOR DRIVING</span></footer>
+      <footer><span>AURA / VEHICLE VOICE AGENT</span><span>Cloud intelligence. Local authority.</span><span>LOCAL COCKPIT — NOT FOR DRIVING</span></footer>
     </main>
   </div>
+  <script type="importmap">{"imports":{"three":"/static/three.module.js"}}</script>
   <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/car-view.js"></script>
 </body>
 </html>

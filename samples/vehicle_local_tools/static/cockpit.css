@@ -1,0 +1,36 @@
+.process-steps [data-step="searching"], .process-steps [data-step="discovered"] { display: none; }
+.process-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.domain-card { padding: 26px; min-width: 0; }
+.domain-card p, .domain-card small, .file-label { color: #aab8cb; line-height: 1.6; }
+.domain-settings { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 16px 0; }
+.domain-settings label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.domain-settings button, .domain-settings select, .domain-settings input[type="number"],
+.domain-card select, #reconnect-controls {
+  border: 1px solid #3b4f67; border-radius: 8px; padding: 9px 11px; background: #142030; color: #e8f0fa;
+}
+.domain-settings input[type="number"] { width: 85px; }
+.domain-settings input[type="checkbox"] { accent-color: #73e8cf; }
+.domain-settings button:disabled { opacity: .5; cursor: not-allowed; }
+.domain-settings :focus-visible, #reconnect-controls:focus-visible { outline: 2px solid #73e8cf; outline-offset: 3px; }
+#sim-scene { width: 100%; max-height: 220px; display: block; margin: 16px 0; border-radius: 12px; object-fit: contain; background: #0b1624; }
+#sim-panel[data-mode="takeover_required"] { border: 2px solid #f48576; }
+#sim-panel[data-mode="takeover_required"] #sim-warning { color: #ffb8aa; font-weight: 700; }
+#cluster-speed { font-size: 42px; font-variant-numeric: tabular-nums; }
+[data-cluster-layout="compact"] #cluster-speed { font-size: 28px; }
+[data-cockpit-theme="light"] #cluster-readout { background: #e5eef6; color: #102238; padding: 12px; border-radius: 10px; }
+#sources { padding-left: 24px; overflow-wrap: anywhere; }
+#sources a { color: #73e8cf; }
+#sources p { font-size: 12px; max-height: 100px; overflow-y: auto; }
+.file-label { display: grid; gap: 8px; margin-top: 16px; }
+.climate-card > .domain-settings, .navigation-card > .domain-settings,
+.media-card > .domain-settings, .media-card > .file-label, .media-card > #media-source {
+  margin-left: 26px; margin-right: 26px;
+}
+.navigation-card > .domain-settings { position: relative; z-index: 1; }
+.climate-card > small { display: block; padding: 0 26px 20px; color: #aab8cb; }
+.media-card > .domain-settings { margin-bottom: 26px; }
+@media (max-width: 600px) {
+  .domain-card { padding: 18px; }
+  .process-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .domain-settings { gap: 8px; }
+}

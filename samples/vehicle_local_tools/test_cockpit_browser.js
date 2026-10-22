@@ -1,0 +1,102 @@
+// Run in the isolated offline cockpit with agent-browser eval --stdin.
+(async () => {
+  const { command } = await import("/static/cockpit.js");
+  const { autopilot } = await import("/static/autopilot-sim.mjs");
+  const $ = (id) => document.getElementById(id);
+  const assert = (value, message) => { if (!value) throw new Error(message); };
+  const waitFor = async (predicate) => {
+    for (let i = 0; i < 150; i++) {
+      if (predicate()) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error("Browser condition timed out.");
+  };
+  const execute = async (name, args, ok = true) => {
+    const packet = await command(name, args);
+    document.dispatchEvent(new CustomEvent("cockpit-snapshot", { detail: packet.state }));
+    assert(packet.result.ok === ok, `${name}: ${JSON.stringify(packet.result)}`);
+    return packet.result;
+  };
+  await waitFor(() => $("control-status").textContent === "Controls connected");
+  assert(!autopilot.state.running && autopilot.state.mode === "disengaged", "Paused initial state");
+  assert(document.documentElement.scrollWidth <= innerWidth, "No horizontal overflow");
+  for (const id of ["sim-title", "navigation-title", "cluster-title", "climate-title", "media-title", "phone-title"]) assert($(id), id);
+  await execute("set_vehicle_doors", { door: "all", is_open: false });
+  await execute("set_vehicle_windows", { window: "all", is_open: false });
+  for (const lid of ["hood", "trunk"]) await execute("set_vehicle_lid", { lid, is_open: false });
+  await execute("control_autopilot", { action: "engage" }, false);
+  await execute("control_autopilot", { action: "resume" });
+  assert(autopilot.state.mode === "disengaged", "Resume does not engage");
+  await execute("control_autopilot", { action: "engage", target_speed_kmh: 42, following_gap: 4, lane_keeping: true });
+  await waitFor(() => autopilot.state.actual_speed_kmh > 0);
+  assert($("sim-state").textContent.includes("active"), "Visible engagement");
+  $("sim-scenario").value = "lane_loss";
+  $("sim-scenario").dispatchEvent(new Event("change"));
+  await waitFor(() => autopilot.state.mode === "takeover_required");
+  assert(!autopilot.state.running, "Takeover pauses scene");
+  await execute("control_autopilot", { action: "resume" }, false);
+  $("sim-scenario").value = "clear";
+  $("sim-scenario").dispatchEvent(new Event("change"));
+  $("sim-acknowledge").click();
+  await execute("control_autopilot", { action: "resume" });
+  assert(autopilot.state.mode === "disengaged", "Manual acknowledgement does not re-engage");
+  await execute("control_autopilot", { action: "engage" });
+  Object.defineProperty(document, "hidden", { configurable: true, value: true });
+  document.dispatchEvent(new Event("visibilitychange"));
+  assert(!autopilot.state.running && autopilot.state.mode === "disengaged", "Hidden page pauses and disengages");
+  delete document.hidden;
+  document.dispatchEvent(new Event("visibilitychange"));
+  assert(!autopilot.state.running, "Visible page never silently resumes");
+  $("motion-source").value = "reference";
+  $("motion-source").dispatchEvent(new Event("change"));
+  await execute("control_autopilot", { action: "resume" }, false);
+  $("motion-source").value = "simulator";
+  $("motion-source").dispatchEvent(new Event("change"));
+  await execute("set_climate", { temperature_c: 23, fan: 4, defrost: true });
+  assert($("temperature").textContent === "23" && $("climate-defrost").checked, "Climate authoritative render");
+  await execute("set_destination", { destination: "Public Library" });
+  assert($("destination").textContent === "Public Library", "Saved destination");
+  await execute("set_cluster_preferences", { units: "imperial", theme: "light", layout: "compact", brightness: 70 });
+  assert(document.documentElement.dataset.cockpitTheme === "light", "Cluster theme");
+  await execute("set_phone_preferences", { notifications: false, detail: "detailed" });
+  assert($("phone-preference-status").textContent.includes("disabled"), "Phone-panel preferences are visible");
+  const audio = $("local-audio");
+  const buffer = new ArrayBuffer(44 + 16000);
+  const view = new DataView(buffer);
+  const text = (at, value) => [...value].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  text(0, "RIFF"); view.setUint32(4, buffer.byteLength - 8, true); text(8, "WAVE"); text(12, "fmt ");
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, 8000, true); view.setUint32(28, 16000, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true); text(36, "data"); view.setUint32(40, 16000, true);
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([buffer], "browser-only-test.wav", { type: "audio/wav" }));
+  $("media-file").files = transfer.files;
+  $("media-file").dispatchEvent(new Event("change"));
+  await waitFor(() => audio.readyState >= 1);
+  await execute("control_media", { action: "mute" });
+  await execute("control_media", { action: "play" });
+  assert(!audio.paused, "Real browser-local audio playback");
+  await execute("control_media", { action: "pause" });
+  assert(audio.paused, "Playback pause confirmed");
+  await execute("control_media", { action: "seek", position_seconds: .2 });
+  await execute("set_media_volume", { volume_percent: 35 });
+  assert(audio.volume === .35, "Media volume controls actual file audio");
+  assert(!document.querySelector('[data-step="searching"]').checkVisibility(), "Routine pipeline hides discovery");
+  assert($("sources").children.length === 0, "No WebIQ calls for local controls");
+  await execute("control_autopilot", { action: "resume" });
+  await execute("control_autopilot", { action: "engage" });
+  const originalSend = WebSocket.prototype.send;
+  try {
+    WebSocket.prototype.send = function (data) {
+      if (typeof data === "string" && ["ping", "browser_state"].includes(JSON.parse(data).type)) return;
+      return originalSend.call(this, data);
+    };
+    await new Promise((resolve) => setTimeout(resolve, 6500));
+    assert(!autopilot.state.running && autopilot.state.mode === "disengaged", "Silent connection loss pauses and disengages");
+    await waitFor(() => $("control-status").textContent.includes("disconnected"));
+  } finally { WebSocket.prototype.send = originalSend; }
+  $("reconnect-controls").click();
+  await waitFor(() => $("control-status").textContent === "Controls connected");
+  assert(!autopilot.state.running, "Reconnect does not resume");
+  return "PASS: six panels, simulator lifecycle/takeover/visibility/connection loss, source arbitration, domain controls, real local audio, zero discovery or web lookups";
+})();
